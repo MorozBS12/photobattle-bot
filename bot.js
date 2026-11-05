@@ -417,6 +417,7 @@ admin.command('admin', (ctx) => ctx.reply(
   `/close_voting · /open_voting — зупинити/відновити голосування\n` +
   `/remove N — дискваліфікувати учасника №N\n` +
   `/finish — завершити й оголосити переможців у каналі\n` +
+  `/poll — опитування в каналі (питання й варіанти з нового рядка)\n` +
   `/broadcast текст — розсилка всім учасникам`,
   { parse_mode: 'HTML' }));
 
@@ -493,6 +494,30 @@ admin.command('finish', async (ctx) => {
     `🥇 Вітаємо, ти переміг у фотобатлі з ❤️ ${top[0].votes.length}! Адміни скоро напишуть щодо призу 🎁`).catch(() => {});
   await toAdmins(`🏆 Переможець: ${top[0].author} (id ${top[0].userId}) — напиши йому щодо призу`);
   ctx.reply('✅ Результати опубліковано в каналі');
+});
+
+// /poll Питання
+// Варіант 1
+// Варіант 2
+// (або в один рядок: /poll Питання | Варіант 1 | Варіант 2)
+admin.command('poll', async (ctx) => {
+  const raw = (ctx.match || '').trim();
+  const parts = (raw.includes('\n') ? raw.split('\n') : raw.split('|'))
+    .map((s) => s.trim()).filter(Boolean);
+  const [question, ...options] = parts;
+  if (!question || options.length < 2 || options.length > 10) {
+    return ctx.reply(
+      'Як зробити опитування в каналі:\n\n' +
+      '/poll Що робимо з каналом?\nРобимо фотобатли\nЩось інше\n\n' +
+      'Перший рядок — питання, далі кожен варіант з нового рядка (від 2 до 10).');
+  }
+  try {
+    const m = await ctx.api.sendPoll(CHANNEL_ID, question.slice(0, 300),
+      options.map((o) => ({ text: o.slice(0, 100) })), { is_anonymous: true });
+    ctx.reply('✅ Опитування опубліковано в каналі' + (channelLink ? `\n${postLink(m.message_id)}` : ''));
+  } catch (err) {
+    ctx.reply('⚠️ Не вдалося: ' + err.message);
+  }
 });
 
 admin.command('broadcast', async (ctx) => {
