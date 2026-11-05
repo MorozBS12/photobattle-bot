@@ -1,0 +1,13 @@
+{
+  "name": "photobattle-bot",
+  "version": "1.0.0",
+  "description": "Telegram-бот для фотобатлу",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "grammy": "^1.30.0"
+  }
+}
