@@ -496,28 +496,46 @@ admin.command('finish', async (ctx) => {
   ctx.reply('✅ Результати опубліковано в каналі');
 });
 
-// /poll Питання
-// Варіант 1
-// Варіант 2
-// (або в один рядок: /poll Питання | Варіант 1 | Варіант 2)
-admin.command('poll', async (ctx) => {
-  const raw = (ctx.match || '').trim();
+// Опитування в каналі.
+// Варіант 1: /poll, а наступним повідомленням — питання й варіанти (кожен з нового рядка)
+// Варіант 2: усе одразу — /poll Питання⏎Варіант 1⏎Варіант 2  (або через |)
+const awaitingPoll = new Set();
+
+async function sendPollFrom(ctx, raw) {
   const parts = (raw.includes('\n') ? raw.split('\n') : raw.split('|'))
     .map((s) => s.trim()).filter(Boolean);
   const [question, ...options] = parts;
-  if (!question || options.length < 2 || options.length > 10) {
-    return ctx.reply(
-      'Як зробити опитування в каналі:\n\n' +
-      '/poll Що робимо з каналом?\nРобимо фотобатли\nЩось інше\n\n' +
-      'Перший рядок — питання, далі кожен варіант з нового рядка (від 2 до 10).');
-  }
+  if (!question || options.length < 2 || options.length > 10) return false;
   try {
     const m = await ctx.api.sendPoll(CHANNEL_ID, question.slice(0, 300),
       options.map((o) => ({ text: o.slice(0, 100) })), { is_anonymous: true });
-    ctx.reply('✅ Опитування опубліковано в каналі' + (channelLink ? `\n${postLink(m.message_id)}` : ''));
+    await ctx.reply('✅ Опитування опубліковано в каналі' + (channelLink ? `\n${postLink(m.message_id)}` : ''));
   } catch (err) {
-    ctx.reply('⚠️ Не вдалося: ' + err.message);
+    await ctx.reply('⚠️ Не вдалося: ' + err.message);
   }
+  return true;
+}
+
+// ловимо /poll навіть якщо повідомлення вставлене як код (без «синьої» команди)
+admin.hears(/^\/poll(?:@\w+)?(?:\s+([\s\S]*))?$/, async (ctx) => {
+  const raw = (ctx.match[1] || '').trim();
+  if (raw && (await sendPollFrom(ctx, raw))) return;
+  awaitingPoll.add(ctx.from.id);
+  await ctx.reply(
+    '📊 Надішли наступним повідомленням питання і варіанти, кожен з нового рядка:\n\n' +
+    'Що робимо з каналом?\nРобимо фотобатли\nЩось інше\n\n' +
+    'Від 2 до 10 варіантів. Скасувати — /cancel');
+});
+
+admin.on('message:text', async (ctx, next) => {
+  if (!awaitingPoll.has(ctx.from.id)) return next();
+  const text = ctx.message.text.trim();
+  if (/^\/cancel/.test(text)) {
+    awaitingPoll.delete(ctx.from.id);
+    return ctx.reply('Скасовано');
+  }
+  if (await sendPollFrom(ctx, text)) return awaitingPoll.delete(ctx.from.id);
+  await ctx.reply('Треба питання і від 2 до 10 варіантів, кожен з нового рядка. Спробуй ще раз або /cancel');
 });
 
 admin.command('broadcast', async (ctx) => {
